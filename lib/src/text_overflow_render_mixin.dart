@@ -204,8 +204,11 @@ mixin TextOverflowMixin on ExtendedTextSelectionRenderObject {
           overflowSelection = convertTextInputSelectionToTextPainterSelection(
               oldSpan, overflowSelection);
 
-          final List<ui.TextBox> boxs =
-              textPainter.getBoxesForSelection(overflowSelection);
+          final List<ui.TextBox> boxs = textPainter.getBoxesForSelection(
+            overflowSelection,
+            boxWidthStyle: selectionWidthStyle,
+            boxHeightStyle: selectionHeightStyle,
+          );
           _overflowRects ??= <Rect>[];
           for (final ui.TextBox box in boxs) {
             final Rect boxRect = box.toRect();
@@ -697,7 +700,11 @@ mixin TextOverflowMixin on ExtendedTextSelectionRenderObject {
   }) {
     effectiveOffset ??= Offset.zero;
 
-    final List<TextBox> boxs = textPainter.getBoxesForSelection(selection);
+    final List<TextBox> boxs = textPainter.getBoxesForSelection(
+      selection,
+      boxWidthStyle: selectionWidthStyle,
+      boxHeightStyle: selectionHeightStyle,
+    );
     if (boxs.isNotEmpty) {
       Rect? rect;
       for (final TextBox box in boxs) {
@@ -725,10 +732,10 @@ mixin TextOverflowMixin on ExtendedTextSelectionRenderObject {
             textPainter.getFullHeightForCaret(textPosition, caretPrototype);
         //assert(height != null, 'can\' find selection');
         if (rect == null) {
-          rect = Rect.fromLTWH(offset.dx, offset.dy, 1, height!);
+          rect = Rect.fromLTWH(offset.dx, offset.dy, 1, height ?? 0);
         } else {
-          rect = rect
-              .expandToInclude(Rect.fromLTWH(offset.dx, offset.dy, 1, height!));
+          rect = rect.expandToInclude(
+              Rect.fromLTWH(offset.dx, offset.dy, 1, height ?? 0));
         }
       }
 

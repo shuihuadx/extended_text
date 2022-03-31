@@ -40,7 +40,6 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
     Locale? locale,
     required LayerLink? startHandleLayerLink,
     required LayerLink? endHandleLayerLink,
-    this.onSelectionChanged,
     Color? selectionColor,
     TextSelection? selection,
     StrutStyle? strutStyle,
@@ -83,12 +82,6 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
     addAll(children);
     extractPlaceholderSpans(text);
   }
-
-  ///TextSelection
-
-  /// Called when the selection changes.
-  @override
-  TextSelectionChangedHandler? onSelectionChanged;
 
   @override
   double get preferredLineHeight => _textPainter.preferredLineHeight;
@@ -243,7 +236,9 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
   ///
   /// For example, if the text scale factor is 1.5, text will be 50% larger than
   /// the specified font size.
+  @override
   double get textScaleFactor => _textPainter.textScaleFactor;
+  @override
   set textScaleFactor(double value) {
     if (_textPainter.textScaleFactor == value) {
       return;
@@ -327,6 +322,7 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
   /// Controls how tall the selection highlight boxes are computed to be.
   ///
   /// See [ui.BoxHeightStyle] for details on available styles.
+  @override
   ui.BoxHeightStyle get selectionHeightStyle => _selectionHeightStyle;
   ui.BoxHeightStyle _selectionHeightStyle;
   set selectionHeightStyle(ui.BoxHeightStyle value) {
@@ -340,6 +336,7 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
   /// Controls how wide the selection highlight boxes are computed to be.
   ///
   /// See [ui.BoxWidthStyle] for details on available styles.
+  @override
   ui.BoxWidthStyle get selectionWidthStyle => _selectionWidthStyle;
   ui.BoxWidthStyle _selectionWidthStyle;
   set selectionWidthStyle(ui.BoxWidthStyle value) {
@@ -544,7 +541,11 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
   List<ui.TextBox> getBoxesForSelection(TextSelection selection) {
     assert(!debugNeedsLayout);
     layoutTextWithConstraints(constraints);
-    return _textPainter.getBoxesForSelection(selection);
+    return _textPainter.getBoxesForSelection(
+      selection,
+      boxWidthStyle: selectionWidthStyle,
+      boxHeightStyle: selectionHeightStyle,
+    );
   }
 
   /// Returns the position within the text for the given pixel offset.
@@ -565,6 +566,7 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
   /// <http://www.unicode.org/reports/tr29/#Word_Boundaries>.
   ///
   /// Valid only after [layout].
+  @override
   TextRange getWordBoundary(TextPosition position) {
     assert(!debugNeedsLayout);
     layoutTextWithConstraints(constraints);
@@ -893,6 +895,10 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
       if (isHit) {
         return true;
       }
+      // stop hittest if overflowRect contains position
+      if (_overflowRect!.contains(position)) {
+        return false;
+      }
     }
     return super.hitTestChildren(result, position: position);
   }
@@ -917,7 +923,11 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
     }
 
     if (showSelection) {
-      _selectionRects ??= _textPainter.getBoxesForSelection(actualSelection);
+      _selectionRects ??= _textPainter.getBoxesForSelection(
+        actualSelection,
+        boxWidthStyle: selectionWidthStyle,
+        boxHeightStyle: selectionHeightStyle,
+      );
 
       assert(_selectionRects != null);
       paintSelection(context.canvas, effectiveOffset);
@@ -965,8 +975,11 @@ class ExtendedRenderParagraph extends ExtendedTextSelectionRenderObject
       // never drag over the over flow text span
       textPainterSelection = neverDragOnOverflow(textPainterSelection);
 
-      final List<ui.TextBox> boxes =
-          _textPainter.getBoxesForSelection(textPainterSelection);
+      final List<ui.TextBox> boxes = _textPainter.getBoxesForSelection(
+        textPainterSelection,
+        boxWidthStyle: selectionWidthStyle,
+        boxHeightStyle: selectionHeightStyle,
+      );
 
       if (boxes.isEmpty) {
         return null;

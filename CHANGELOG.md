@@ -1,3 +1,25 @@
+# 9.0.0
+
+* Migrate to 2.10.0.
+* Add shouldShowSelectionHandles and textSelectionGestureDetectorBuilder call back to define the behavior of handles and toolbar.
+* Shortcut support for web and desktop.
+
+# 8.0.2
+
+* Fix selectionWidthStyle and selectionHeightStyle are not working.
+
+## 8.0.1
+
+* Support copy on desktop
+
+## 8.0.0
+
+* Migrate to 2.8
+
+## 7.0.1
+
+* Stop hittest if overflowWidget is not hit but overflowRect contains hit pointer.
+
 ## 7.0.0
 
 * Add [SpecialTextSpan.mouseCursor], [SpecialTextSpan.onEnter] and [SpecialTextSpan.onExit].

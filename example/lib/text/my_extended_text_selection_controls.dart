@@ -1,9 +1,9 @@
 import 'dart:math' as math;
+import 'package:extended_text_library/extended_text_library.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:extended_text_library/extended_text_library.dart';
 
 ///
 ///  create by zmtzawqlp on 2019/8/3
@@ -35,11 +35,12 @@ class MyTextSelectionControls extends TextSelectionControls {
     ));
     clipboardStatus?.update();
     delegate.userUpdateTextEditingValue(
-        TextEditingValue(
-          text: value.text,
-          selection: TextSelection.collapsed(offset: value.selection.end),
-        ),
-        SelectionChangedCause.toolBar);
+      TextEditingValue(
+        text: value.text,
+        selection: TextSelection.collapsed(offset: value.selection.end),
+      ),
+      SelectionChangedCause.toolbar,
+    );
     delegate.bringIntoView(delegate.textEditingValue.selection.extent);
     delegate.hideToolbar();
   }
@@ -68,7 +69,8 @@ class MyTextSelectionControls extends TextSelectionControls {
       endpoints: endpoints,
       delegate: delegate,
       clipboardStatus: clipboardStatus,
-      handleCut: canCut(delegate) ? () => handleCut(delegate) : null,
+      handleCut:
+          canCut(delegate) ? () => handleCut(delegate, clipboardStatus) : null,
       handleCopy: canCopy(delegate)
           ? () => handleCopy(delegate, clipboardStatus)
           : null,
@@ -82,7 +84,7 @@ class MyTextSelectionControls extends TextSelectionControls {
         delegate.userUpdateTextEditingValue(
             delegate.textEditingValue
                 .copyWith(selection: const TextSelection.collapsed(offset: 0)),
-            SelectionChangedCause.toolBar);
+            SelectionChangedCause.toolbar);
       },
     );
   }
@@ -90,7 +92,8 @@ class MyTextSelectionControls extends TextSelectionControls {
   /// Builder for material-style text selection handles.
   @override
   Widget buildHandle(
-      BuildContext context, TextSelectionHandleType type, double textHeight) {
+      BuildContext context, TextSelectionHandleType type, double textLineHeight,
+      [VoidCallback? onTap, double? startGlyphHeight, double? endGlyphHeight]) {
     final Widget handle = SizedBox(
       width: _kHandleSize,
       height: _kHandleSize,
@@ -121,8 +124,10 @@ class MyTextSelectionControls extends TextSelectionControls {
   /// Gets anchor for material-style text selection handles.
   ///
   /// See [TextSelectionControls.getHandleAnchor].
+
   @override
-  Offset getHandleAnchor(TextSelectionHandleType type, double textLineHeight) {
+  Offset getHandleAnchor(TextSelectionHandleType type, double textLineHeight,
+      [double? startGlyphHeight, double? endGlyphHeight]) {
     switch (type) {
       case TextSelectionHandleType.left:
         return const Offset(_kHandleSize, 0);

@@ -1,3 +1,5 @@
+// ignore_for_file: always_put_control_body_on_new_line
+
 import 'dart:ui';
 
 import 'package:extended_text_library/extended_text_library.dart';
@@ -28,7 +30,7 @@ class ExtendedTextSelection extends StatefulWidget {
     this.overflow,
     this.text,
     this.selectionColor,
-    this.dragStartBehavior,
+    this.dragStartBehavior = DragStartBehavior.start,
     this.data,
     this.textSelectionControls,
     this.textWidthBasis,
@@ -37,8 +39,20 @@ class ExtendedTextSelection extends StatefulWidget {
     this.selectionWidthStyle = BoxWidthStyle.tight,
     this.overFlowWidget,
     this.strutStyle,
+    this.shouldShowSelectionHandles,
+    this.textSelectionGestureDetectorBuilder,
     Key? key,
   }) : super(key: key);
+
+  /// create custom TextSelectionGestureDetectorBuilder
+  final TextSelectionGestureDetectorBuilderCallback?
+      textSelectionGestureDetectorBuilder;
+
+  /// Whether should show selection handles
+  /// handles are not shown in desktop or web as default
+  /// you can define your behavior
+  final ShouldShowSelectionHandlesCallback? shouldShowSelectionHandles;
+
   final TextOverflowWidget? overFlowWidget;
 
   /// Controls how tall the selection highlight boxes are computed to be.
@@ -119,7 +133,7 @@ class ExtendedTextSelection extends StatefulWidget {
 
   final Color? selectionColor;
 
-  final DragStartBehavior? dragStartBehavior;
+  final DragStartBehavior dragStartBehavior;
 
   final String? data;
 
@@ -133,6 +147,7 @@ class ExtendedTextSelection extends StatefulWidget {
 }
 
 class ExtendedTextSelectionState extends State<ExtendedTextSelection>
+    //with TextEditingActionTarget
     implements
         ExtendedTextSelectionGestureDetectorBuilderDelegate,
         TextSelectionDelegate,
@@ -149,37 +164,62 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
   ExtendedTextSelectionPointerHandlerState? _pointerHandlerState;
   late CommonTextSelectionGestureDetectorBuilder
       _selectionGestureDetectorBuilder;
-  final ClipboardStatusNotifier? _clipboardStatus =
-      kIsWeb ? null : ClipboardStatusNotifier();
+  ClipboardStatusNotifier? _clipboardStatus;
 
   FocusNode? _focusNode;
   FocusAttachment? _focusAttachment;
   FocusNode get _effectiveFocusNode => _focusNode ??= FocusNode();
   bool get _hasFocus => _effectiveFocusNode.hasFocus;
+
+  late final Map<Type, Action<Intent>> _actions = <Type, Action<Intent>>{
+    SelectAllTextIntent: _makeOverridable(_SelectAllAction(this)),
+    CopySelectionTextIntent: _makeOverridable(_CopySelectionAction(this)),
+  };
   @override
   void initState() {
+    super.initState();
+    _initGestureDetectorBuilder();
     _textSelectionControls = widget.textSelectionControls;
+    _clipboardStatus =
+        kIsWeb && !_selectionGestureDetectorBuilder.showToolbarInWeb
+            ? null
+            : ClipboardStatusNotifier();
     _clipboardStatus?.addListener(_onChangedClipboardStatus);
     _focusAttachment = _effectiveFocusNode.attach(context);
     _effectiveFocusNode.addListener(_handleFocusChanged);
-    _selectionGestureDetectorBuilder =
-        CommonTextSelectionGestureDetectorBuilder(
-      delegate: this,
-      hideToolbar: hideToolbar,
-      showToolbar: showToolbar,
-      onTap: widget.onTap,
-      context: context,
-      requestKeyboard: requestKeyboard,
-    );
     textEditingValue = TextEditingValue(
         text: widget.data!,
         selection: const TextSelection.collapsed(offset: 0));
+    _effectiveFocusNode.canRequestFocus = true;
+  }
 
-    super.initState();
+  void _initGestureDetectorBuilder() {
+    if (widget.textSelectionGestureDetectorBuilder != null) {
+      _selectionGestureDetectorBuilder =
+          widget.textSelectionGestureDetectorBuilder!(
+        delegate: this,
+        hideToolbar: hideToolbar,
+        showToolbar: showToolbar,
+        onTap: widget.onTap,
+        context: context,
+        requestKeyboard: requestKeyboard,
+      );
+    } else {
+      _selectionGestureDetectorBuilder =
+          CommonTextSelectionGestureDetectorBuilder(
+        delegate: this,
+        hideToolbar: hideToolbar,
+        showToolbar: showToolbar,
+        onTap: widget.onTap,
+        context: context,
+        requestKeyboard: requestKeyboard,
+      );
+    }
   }
 
   @override
   void didUpdateWidget(ExtendedTextSelection oldWidget) {
+    super.didUpdateWidget(oldWidget);
     if (oldWidget.textSelectionControls != widget.textSelectionControls) {
       _textSelectionControls = widget.textSelectionControls;
       final ThemeData theme = Theme.of(context);
@@ -215,7 +255,10 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
     if (pasteEnabled && widget.textSelectionControls?.canPaste(this) == true) {
       _clipboardStatus?.update();
     }
-    super.didUpdateWidget(oldWidget);
+
+    if (widget.textSelectionGestureDetectorBuilder !=
+        oldWidget.textSelectionGestureDetectorBuilder)
+      _initGestureDetectorBuilder();
   }
 
   @override
@@ -263,7 +306,7 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
         _pointerHandlerState!.selectionStates.add(this);
       }
     }
-
+    VoidCallback? handleDidGainAccessibilityFocus;
     Color? selectionColor = widget.selectionColor;
 
     switch (theme.platform) {
@@ -284,7 +327,13 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
 
         selectionColor ??= selectionTheme.selectionColor ??
             cupertinoTheme.primaryColor.withOpacity(0.40);
-
+        handleDidGainAccessibilityFocus = () {
+          // Automatically activate the TextField when it receives accessibility focus.
+          if (!_effectiveFocusNode.hasFocus &&
+              _effectiveFocusNode.canRequestFocus) {
+            _effectiveFocusNode.requestFocus();
+          }
+        };
         break;
 
       case TargetPlatform.android:
@@ -301,6 +350,14 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
         _textSelectionControls ??= desktopTextSelectionControls;
         selectionColor ??= selectionTheme.selectionColor ??
             theme.colorScheme.primary.withOpacity(0.40);
+        if (theme.platform == TargetPlatform.windows)
+          handleDidGainAccessibilityFocus = () {
+            // Automatically activate the TextField when it receives accessibility focus.
+            if (!_effectiveFocusNode.hasFocus &&
+                _effectiveFocusNode.canRequestFocus) {
+              _effectiveFocusNode.requestFocus();
+            }
+          };
         break;
     }
 
@@ -309,6 +366,7 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
             link: _toolbarLayerLink,
             child: Semantics(
               onCopy: _semanticsOnCopy(_textSelectionControls),
+              onDidGainAccessibilityFocus: handleDidGainAccessibilityFocus,
               child: ExtendedRichText(
                 textAlign: widget.textAlign!,
                 textDirection: widget
@@ -323,7 +381,6 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
                 key: _renderParagraphKey,
                 selectionColor: selectionColor,
                 selection: textEditingValue.selection,
-                onSelectionChanged: _handleSelectionChanged,
                 startHandleLayerLink: _startHandleLayerLink,
                 endHandleLayerLink: _endHandleLayerLink,
                 textWidthBasis: widget.textWidthBasis!,
@@ -341,7 +398,15 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
       child: result,
     );
     result = MouseRegion(
-      child: result,
+      child: Actions(
+        actions: _actions,
+        child: Focus(
+          focusNode: _effectiveFocusNode,
+          includeSemantics: false,
+          debugLabel: 'ExtendedTextSelection',
+          child: result,
+        ),
+      ),
       cursor: SystemMouseCursors.text,
     );
     return result;
@@ -354,32 +419,63 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
   }
 
   void _handleSelectionChanged(
-      TextSelection selection, SelectionChangedCause cause) {
-    textEditingValue = textEditingValue.copyWith(selection: selection);
-    _hideSelectionOverlayIfNeeded();
+      TextSelection selection, SelectionChangedCause? cause) {
+    // We return early if the selection is not valid. This can happen when the
+    // text of [EditableText] is updated at the same time as the selection is
+    // changed by a gesture event.
+    // if (!widget.controller.isSelectionWithinTextBounds(selection)) {
+    //   return;
+    // }
+
+    // if (renderEditable.hasSpecialInlineSpanBase) {
+    //   final TextEditingValue value = correctCaretOffset(
+    //       _value, renderEditable.text!, _textInputConnection,
+    //       newSelection: selection);
+
+    //   ///change
+    //   if (value != _value) {
+    //     selection = value.selection;
+    //     _value = value;
+    //   }
+    // }
+
+    // final bool textChanged = widget.controller.text != renderEditable.plainText;
+    // // zmt
+    // // if textChanged, text was changed by user,
+    // // _didChangeTextEditingValue setstate to change text of ExtendedRenderEditable
+    // // but still slower than this method.
+    // if (!textChanged) {
+    //   widget.controller.selection = selection;
+    // }
+
+    // This will show the keyboard for all selection changes on the
+    // EditableWidget, not just changes triggered by user gestures.
     requestKeyboard();
-    //todo
-    //    if (widget.selectionControls != null) {
-    _selectionOverlay = ExtendedTextSelectionOverlay(
-        clipboardStatus: _clipboardStatus,
-        context: context,
-        debugRequiredFor: widget,
-        toolbarLayerLink: _toolbarLayerLink,
-        startHandleLayerLink: _startHandleLayerLink,
-        endHandleLayerLink: _endHandleLayerLink,
-        renderObject: _renderParagraph!,
-        value: textEditingValue,
-        dragStartBehavior: widget.dragStartBehavior!,
-        selectionDelegate: this,
-        onSelectionHandleTapped: _handleSelectionHandleTapped,
-        handlesVisible: true,
-        selectionControls: _textSelectionControls);
-    final bool longPress = cause == SelectionChangedCause.longPress;
-    if (cause != SelectionChangedCause.keyboard &&
-        (widget.text!.toPlainText().isNotEmpty || longPress))
+    if (_textSelectionControls == null) {
+      _selectionOverlay?.dispose();
+      _selectionOverlay = null;
+    } else {
+      if (_selectionOverlay == null) {
+        _selectionOverlay = ExtendedTextSelectionOverlay(
+          clipboardStatus: _clipboardStatus,
+          context: context,
+          value: _value,
+          debugRequiredFor: widget,
+          toolbarLayerLink: _toolbarLayerLink,
+          startHandleLayerLink: _startHandleLayerLink,
+          endHandleLayerLink: _endHandleLayerLink,
+          renderObject: renderEditable,
+          selectionControls: _textSelectionControls,
+          selectionDelegate: this,
+          dragStartBehavior: widget.dragStartBehavior,
+          onSelectionHandleTapped: _handleSelectionHandleTapped,
+        );
+      } else {
+        _selectionOverlay!.update(_value);
+      }
+      _selectionOverlay!.handlesVisible = _shouldShowSelectionHandles(cause);
       _selectionOverlay!.showHandles();
-    //      if (widget.onSelectionChanged != null)
-    //        widget.onSelectionChanged(selection, cause);
+    }
   }
 
   late TextEditingValue _value;
@@ -425,12 +521,21 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
 
   /// Shows the selection toolbar at the location of the current cursor.
   ///
-  /// Returns `false` if a toolbar couldn't be shown such as when no text
-  /// selection currently exists.
+  /// Returns `false` if a toolbar couldn't be shown, such as when the toolbar
+  /// is already shown, or when no text selection currently exists.
   bool showToolbar() {
-    if (_selectionOverlay == null) {
+    // Web is using native dom elements to enable clipboard functionality of the
+    // toolbar: copy, paste, select, cut. It might also provide additional
+    // functionality depending on the browser (such as translate). Due to this
+    // we should not show a Flutter toolbar for the editable text elements.
+    if (kIsWeb && !_selectionGestureDetectorBuilder.showToolbarInWeb) {
       return false;
     }
+
+    if (_selectionOverlay == null || _selectionOverlay!.toolbarIsVisible) {
+      return false;
+    }
+
     _selectionOverlay!.showToolbar();
     return true;
   }
@@ -440,7 +545,7 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
     if (hideHandles) {
       // Hide the handles and the toolbar.
       _selectionOverlay?.hide();
-    } else {
+    } else if (_selectionOverlay?.toolbarIsVisible ?? false) {
       // Hide only the toolbar but not the handles.
       _selectionOverlay?.hideToolbar();
     }
@@ -456,18 +561,13 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
     }
   }
 
-  void _hideSelectionOverlayIfNeeded() {
-    _selectionOverlay?.hide();
-    _selectionOverlay = null;
-  }
-
-  ///hittest
+  /// hittest
   bool containsPosition(Offset position) {
     //_hideSelectionOverlayIfNeeded();
     return _renderParagraph!.containsPosition(position);
   }
 
-  ///clear selection if it has.
+  /// clear selection if it has.
   void clearSelection() {
     if (!textEditingValue.selection.isCollapsed) {
       textEditingValue = textEditingValue.copyWith(
@@ -600,7 +700,11 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
 
     if (value.text == _value.text && value.composing == _value.composing) {
       // `selection` is the only change.
-      _handleSelectionChanged(value.selection, SelectionChangedCause.keyboard);
+      setState(() {
+        _value = _value.copyWith(selection: value.selection);
+        _handleSelectionChanged(
+            value.selection, SelectionChangedCause.keyboard);
+      });
     } else {
       //hideToolbar();
       textEditingValue = value;
@@ -633,12 +737,142 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
   @override
   void userUpdateTextEditingValue(
       TextEditingValue value, SelectionChangedCause cause) {
-    _selectionOverlay?.update(value);
+    // _selectionOverlay?.update(value);
     _textInputConnection?.setEditingState(value);
+    final TextSelection old = _value.selection;
+    _value = value;
+    if (old != value.selection ||
+        cause == SelectionChangedCause.longPress ||
+        cause == SelectionChangedCause.keyboard) {
+      _handleSelectionChanged(value.selection, cause);
+    }
     if (mounted) {
-      setState(() {
-        _value = value;
-      });
+      setState(() {});
     }
   }
+
+  @override
+  void copySelection(SelectionChangedCause cause) {
+    final TextSelection selection = textEditingValue.selection;
+    final String text = textEditingValue.text;
+    if (selection.isCollapsed || !selection.isValid) {
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: selection.textInside(text)));
+    if (cause == SelectionChangedCause.toolbar) {
+      bringIntoView(textEditingValue.selection.extent);
+      hideToolbar(false);
+
+      switch (defaultTargetPlatform) {
+        case TargetPlatform.iOS:
+          break;
+        case TargetPlatform.macOS:
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          // Collapse the selection and hide the toolbar and handles.
+          userUpdateTextEditingValue(
+            TextEditingValue(
+              text: textEditingValue.text,
+              selection: TextSelection.collapsed(
+                  offset: textEditingValue.selection.end),
+            ),
+            SelectionChangedCause.toolbar,
+          );
+          break;
+      }
+    }
+  }
+
+  @override
+  void cutSelection(SelectionChangedCause cause) {}
+
+  /// {@macro flutter.widgets.TextEditingActionTarget.pasteText}
+  @override
+  Future<void> pasteText(SelectionChangedCause cause) async {}
+
+  /// Select the entire text value.
+  @override
+  void selectAll(SelectionChangedCause cause) {
+    textEditingValue = textEditingValue.copyWith(
+        selection: textEditingValue.selection.copyWith(
+      baseOffset: 0,
+      extentOffset: textEditingValue.text.length,
+    ));
+    if (cause == SelectionChangedCause.toolbar) {
+      bringIntoView(textEditingValue.selection.extent);
+    }
+  }
+
+  Action<T> _makeOverridable<T extends Intent>(Action<T> defaultAction) {
+    return Action<T>.overridable(
+        context: context, defaultAction: defaultAction);
+  }
+
+  bool _shouldShowSelectionHandles(SelectionChangedCause? cause) {
+    if (widget.shouldShowSelectionHandles != null) {
+      return widget.shouldShowSelectionHandles!(
+        cause,
+        _selectionGestureDetectorBuilder,
+        _value,
+      );
+    }
+    // When the text field is activated by something that doesn't trigger the
+    // selection overlay, we shouldn't show the handles either.
+    if (!_selectionGestureDetectorBuilder.shouldShowSelectionToolbar)
+      return false;
+
+    if (cause == SelectionChangedCause.keyboard) return false;
+
+    if (_value.selection.isCollapsed) return false;
+
+    if (cause == SelectionChangedCause.longPress) return true;
+
+    if (_value.text.isNotEmpty) return true;
+
+    return false;
+  }
+}
+
+class _CopySelectionAction extends ContextAction<CopySelectionTextIntent> {
+  _CopySelectionAction(this.state);
+
+  final ExtendedTextSelectionState state;
+
+  @override
+  void invoke(CopySelectionTextIntent intent, [BuildContext? context]) {
+    if (intent.collapseSelection) {
+      state.cutSelection(intent.cause);
+    } else {
+      state.copySelection(intent.cause);
+    }
+  }
+
+  @override
+  bool get isActionEnabled =>
+      state._value.selection.isValid && !state._value.selection.isCollapsed;
+}
+
+class _SelectAllAction extends ContextAction<SelectAllTextIntent> {
+  _SelectAllAction(this.state);
+
+  final ExtendedTextSelectionState state;
+
+  @override
+  Object? invoke(SelectAllTextIntent intent, [BuildContext? context]) {
+    // zmtzawqlp:  we don't have UpdateSelectionIntent here
+    state.selectAll(intent.cause);
+    return Actions.invoke(
+      context!,
+      UpdateSelectionIntent(
+        state._value,
+        TextSelection(baseOffset: 0, extentOffset: state._value.text.length),
+        intent.cause,
+      ),
+    );
+  }
+
+  @override
+  bool get isActionEnabled => true;
 }

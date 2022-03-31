@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 
 ///emoji/image text
 class EmojiText extends SpecialText {
-  EmojiText(TextStyle textStyle, {this.start})
+  EmojiText(TextStyle? textStyle, {this.start})
       : super(EmojiText.flag, ']', textStyle);
   static const String flag = '[';
   final int? start;
   @override
   InlineSpan finishText() {
-    final String key = getContent();
+    final String key = toString();
 
     /// widget span is not working on web
     if (EmojiUitl.instance.emojiMap.containsKey(key)) {
@@ -39,8 +39,8 @@ class EmojiText extends SpecialText {
 
 class EmojiUitl {
   EmojiUitl._() {
-    _emojiMap['love'] = '$_emojiFilePath/love.png';
-    _emojiMap['sun_glasses'] = '$_emojiFilePath/sun_glasses.png';
+    _emojiMap['[love]'] = '$_emojiFilePath/love.png';
+    _emojiMap['[sun_glasses]'] = '$_emojiFilePath/sun_glasses.png';
   }
 
   final Map<String, String> _emojiMap = <String, String>{};

@@ -1,6 +1,6 @@
 name: extended_text
 description: Extended official text to build special text like inline image or @somebody quickly,it also support custom background,custom over flow and custom selection toolbar and handles.
-version: 7.0.0
+version: 9.0.0
 homepage: https://github.com/fluttercandies/extended_text
 # The following line prevents the package from being accidentally published to
 # pub.dev using `pub publish`. This is preferred for private packages.
@@ -8,7 +8,7 @@ publish_to: none # Remove this line if you wish to publish to pub.dev
 
 environment:
   sdk: '>=2.13.0 <3.0.0'
-  flutter: ">=2.2.0"
+  flutter: ">=2.10.0"
 
 dependencies:
   extended_text_library:
@@ -16,7 +16,7 @@ dependencies:
       url: https://github.com/shuihuadx/extended_text_library.git # Repo
       # ref: master # Branch name
       # 使用分支名存在缺陷,当远端代码更新后,此处没有立即更新,所以这里直接依赖某次提交
-      ref: bf2dbf5751076c3181b593c58fbe032c858a4244
+      ref: 98a214c62f071903ff2129e3f3990f6537226dbd
   flutter:
     sdk: flutter
 
